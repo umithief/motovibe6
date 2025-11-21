@@ -3,7 +3,7 @@ import { PRODUCTS } from "../constants";
 
 // Initialize the client
 // API key must be obtained exclusively from process.env.API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
 const SYSTEM_INSTRUCTION = `
 Sen MotoVibe adında bir motosiklet aksesuar mağazasının uzman yapay zeka satış danışmanısın.
