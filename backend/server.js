@@ -211,6 +211,16 @@ app.post('/api/stats/visit', async (req, res) => {
     try { const d = new Date().toLocaleDateString('tr-TR'); let v = await Visitor.findOne({date: d}); if(v) v.count++; else v = new Visitor({date: d, count: 1}); await v.save(); res.json({success: true}); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+// --- EKSİK OLAN ANALİTİK KODU (BUNU EKLE) ---
+app.post('/api/analytics/event', async (req, res) => { 
+    try {
+        const e = new Analytics({ ...req.body });
+        // ID'yi Mongo otomatik verir veya frontend verirse onu kullanırız
+        await e.save();
+        res.json({success:true}); 
+    } catch (e) { res.status(500).json({ message: e.message }); } 
+});
+
 // 6. Category Routes
 app.get('/api/categories', async (req, res) => { 
     try { const c = await Category.find(); res.json(c); } catch (e) { res.status(500).json({ message: e.message }); }
