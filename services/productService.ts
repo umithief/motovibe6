@@ -13,11 +13,11 @@ export const productService = {
     }
   },
 
-  async addProduct(product: Omit<Product, 'id'>): Promise<Product> {
+  // DÜZELTME 1: Artık frontend tarafında 'id' üretmiyoruz.
+  async addProduct(product: Omit<Product, '_id' | 'id'>): Promise<Product> {
     const safeProduct = {
         ...product,
-        // Frontend ID üretsin (Timestamp) - Sayısal çakışmayı önler
-        id: Date.now(), 
+        // id: Date.now(),  <-- BU SATIRI SİLDİK! MongoDB kendisi _id verecek.
         images: product.images && product.images.length > 0 ? product.images : [product.image],
         image: product.image || (product.images && product.images[0]) || '',
         stock: product.stock || 0
@@ -36,7 +36,8 @@ export const productService = {
     return await response.json();
   },
 
-  async deleteProduct(id: number): Promise<void> {
+  // DÜZELTME 2: id tipi 'number' değil 'string' olmalı (MongoDB _id için)
+  async deleteProduct(id: string): Promise<void> {
     await fetch(`${CONFIG.API_URL}/products/${id}`, {
         method: 'DELETE'
     });
@@ -50,7 +51,11 @@ export const productService = {
         stock: product.stock || 0
     };
 
-    const response = await fetch(`${CONFIG.API_URL}/products/${product._id}`, {
+    // DÜZELTME 3: product.id yerine product._id kullanıyoruz
+    // (Eğer types.ts güncellendiyse product._id hata vermez)
+    const idToUpdate = product._id || product.id;
+
+    const response = await fetch(`${CONFIG.API_URL}/products/${idToUpdate}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(safeProduct)
