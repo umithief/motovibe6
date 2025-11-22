@@ -1,12 +1,21 @@
-// config.ts dosyasının yeni hali:
+// Bu dosya uygulamanın nerede çalıştığını (Local vs Canlı) otomatik algılar.
 
-// Render'dan aldığın "Backend" adresini buraya tırnak içine yaz:
-// ÖNEMLİ: Sonunda /api olsun.
-const API_URL = 'https://motovibe2.onrender.com/api'; 
+const getEnv = () => {
+    try {
+        // @ts-ignore
+        return (import.meta && import.meta.env) ? import.meta.env : {};
+    } catch {
+        return {};
+    }
+};
 
-// (Not: motovibe2 yerine senin Render'daki gerçek ismin neyse onu yazacaksın)
+const env = getEnv();
+
+// GERÇEK SUNUCUDA ÇALIŞMASI İÇİN FALSE YAPILDI.
+// Backend (node server.js) çalışıyor olmalıdır.
+const USE_MOCK = false;
 
 export const CONFIG = {
-  USE_MOCK_API: false,
-  API_URL: API_URL
+    USE_MOCK_API: USE_MOCK, 
+    API_URL: env.VITE_API_URL || 'http://localhost:5000/api'
 };
