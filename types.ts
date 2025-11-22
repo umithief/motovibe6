@@ -10,13 +10,15 @@ export enum ProductCategory {
 }
 
 export interface CategoryItem {
-    id: string;
-    name: string;
-    type: ProductCategory; // Enum ile eşleşmeli
-    image: string;
-    desc: string;
-    count: string;
-    className?: string; // Grid yerleşimi için (col-span-2 vb.)
+  _id?: string; // <--- BUNU MUTLAKA EKLE
+  id?: string;  // Eskisi de dursun, zararı yok
+  name: string;
+  type: ProductCategory; // Veya string
+  image: string;
+  desc: string;
+  count: string;
+  className?: string;
+}
 }
 
 export interface Product {
