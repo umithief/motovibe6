@@ -50,7 +50,7 @@ export const productService = {
         stock: product.stock || 0
     };
 
-    const response = await fetch(`${CONFIG.API_URL}/products/${product.id}`, {
+    const response = await fetch(`${CONFIG.API_URL}/products/${product._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(safeProduct)
