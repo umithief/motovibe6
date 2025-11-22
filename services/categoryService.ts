@@ -2,7 +2,7 @@ import { CategoryItem, ProductCategory } from '../types';
 import { DB, getStorage, setStorage, delay } from './db';
 import { CONFIG } from './config';
 
-// Varsayılan Kategoriler (Yedek)
+// Varsayılan Kategoriler (Yedek - Backend çalışmazsa bunlar görünür)
 const DEFAULT_CATEGORIES: CategoryItem[] = [
   {
     id: 'cat-1',
@@ -114,8 +114,9 @@ export const categoryService = {
             setStorage(DB.CATEGORIES, categories);
         }
     } else {
-        // REAL BACKEND
-        await fetch(`${CONFIG.API_URL}/categories/${category.id}`, {
+        // REAL BACKEND (DÜZELTİLDİ)
+        // category.id yerine category._id kullanıyoruz.
+        await fetch(`${CONFIG.API_URL}/categories/${category._id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(category)
@@ -130,7 +131,8 @@ export const categoryService = {
         const filtered = categories.filter(c => c.id !== id);
         setStorage(DB.CATEGORIES, filtered);
     } else {
-        // REAL BACKEND
+        // REAL BACKEND (DÜZELTİLDİ)
+        // Buraya gelen 'id' parametresinin _id olduğundan emin olmalıyız.
         await fetch(`${CONFIG.API_URL}/categories/${id}`, {
             method: 'DELETE'
         });
