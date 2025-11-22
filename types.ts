@@ -96,12 +96,13 @@ export interface ForumTopic {
 }
 
 export interface Slide {
-  id: number;
+  _id?: string; // <--- Bunu ekle
+  id?: number | string; // Eskisi kalsın ama string de alabilsin
   image: string;
   title: string;
-  subtitle: string;
-  cta: string;
-  action: ViewState;
+  subtitle?: string;
+  cta?: string;
+  action?: 'shop' | 'blog' | 'contact';
 }
 
 export interface ActivityLog {
