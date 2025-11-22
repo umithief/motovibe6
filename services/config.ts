@@ -12,7 +12,7 @@ const getEnv = () => {
 const env = getEnv();
 
 // VITE_API_URL varsa onu kullan (Canlı Sunucu), yoksa Localhost kullan
-const API_URL = env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = env.VITE_API_URL || 'https://motovibe6-api.onrender.com/api';
 
 // Eğer API_URL 'localhost' içeriyorsa ve environment production değilse Mock kapalı
 const USE_MOCK = false;
