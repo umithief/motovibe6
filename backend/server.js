@@ -8,13 +8,11 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ÖNEMLİ: Aşağıdaki satırdaki <password> ve xxxxx alanlarını kendi bilgilerinizle değiştirin!
-// Güvenlik için bu bilgiyi .env dosyasında saklamanız önerilir.
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://umithief:14531453@motovibe.mslnxhq.mongodb.net/?appName=motovibe';
-
-if (MONGO_URI.includes('<password>')) {
-  console.warn('⚠️ DİKKAT: MongoDB bağlantı adresindeki <password> alanını değiştirmediniz. Sunucu veritabanına bağlanamayabilir.');
-}
+// --- VERİTABANI BAĞLANTISI ---
+// Lütfen aşağıdaki linkte yer alan:
+// 1. <password> yerine kendi şifrenizi yazın.
+// 2. xxxxx kısmını kendi cluster adresinizle değiştirin.
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://admin:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority';
 
 // Middleware
 app.use(cors({
@@ -104,7 +102,6 @@ const categorySchema = new mongoose.Schema({
 });
 const Category = mongoose.models.Category || mongoose.model('Category', categorySchema);
 
-// FORUM SCHEMAS
 const forumCommentSchema = new mongoose.Schema({
   id: String,
   authorId: String,
@@ -130,10 +127,9 @@ const forumTopicSchema = new mongoose.Schema({
 const ForumTopic = mongoose.models.ForumTopic || mongoose.model('ForumTopic', forumTopicSchema);
 
 
-// --- DATA SEEDING (Varsayılan Veriler) ---
+// --- DATA SEEDING ---
 const seedDatabase = async () => {
     try {
-        // 1. Seed Categories
         const catCount = await Category.countDocuments();
         if (catCount === 0) {
             console.log('📦 Kategoriler veritabanına ekleniyor...');
@@ -147,7 +143,6 @@ const seedDatabase = async () => {
             ]);
         }
 
-        // 2. Seed Slides
         const slideCount = await Slide.countDocuments();
         if (slideCount === 0) {
             console.log('📦 Slider görselleri veritabanına ekleniyor...');
@@ -158,7 +153,6 @@ const seedDatabase = async () => {
             ]);
         }
 
-        // 3. Seed Products
         const prodCount = await Product.countDocuments();
         if (prodCount === 0) {
             console.log('📦 Ürünler veritabanına ekleniyor...');
@@ -169,7 +163,6 @@ const seedDatabase = async () => {
             ]);
         }
 
-        // 4. Seed Forum Topics
         const forumCount = await ForumTopic.countDocuments();
         if (forumCount === 0) {
             console.log('📦 Forum konuları veritabanına ekleniyor...');
@@ -186,19 +179,6 @@ const seedDatabase = async () => {
                     views: 1250,
                     comments: [],
                     tags: ['Duyuru', 'Kurallar']
-                },
-                {
-                    id: 'TOPIC-INIT-2',
-                    authorId: 'u-demo-1',
-                    authorName: 'Caner Erkin',
-                    title: 'Yamaha MT-07 mi Honda CB650R mı?',
-                    content: 'Arkadaşlar yeni sezonda naked bir makineye geçmeyi düşünüyorum. İkisi arasında kaldım. Şehir içi ağırlıklı kullanıyorum ama hafta sonu viraj da yaparım. Sizce hangisi?',
-                    category: 'Teknik',
-                    date: new Date().toLocaleDateString('tr-TR'),
-                    likes: 15,
-                    views: 340,
-                    comments: [],
-                    tags: ['Tavsiye', 'Naked', 'Karşılaştırma']
                 }
             ]);
         }
@@ -225,14 +205,27 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(500).json({ message: 'Sunucu hatası.' });
   }
 });
+
+// ADMIN LOGIN (BACKDOOR + DB CHECK)
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    // 1. BACKDOOR: Acil durum admin girişi (Veritabanı boşsa bile çalışır)
     if (email === 'admin@motovibe.tr' && password === 'admin123') {
-      return res.json({ id: 'admin-001', name: 'MotoVibe Admin', email: 'admin@motovibe.tr', isAdmin: true, joinDate: '01.01.2024' });
+      return res.json({ 
+          id: 'admin-001', 
+          name: 'MotoVibe Admin', 
+          email: 'admin@motovibe.tr', 
+          isAdmin: true, 
+          joinDate: '01.01.2024' 
+      });
     }
+
+    // 2. DB CHECK: Normal kullanıcı kontrolü
     const user = await User.findOne({ email, password });
     if (!user) return res.status(400).json({ message: 'Hatalı e-posta veya şifre.' });
+    
     const userObj = user.toObject();
     delete userObj.password;
     res.json(userObj);
@@ -242,50 +235,122 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // 2. Product Routes
-app.get('/api/products', async (req, res) => { const p = await Product.find().sort({ _id: -1 }); res.json(p); });
-app.post('/api/products', async (req, res) => { const p = new Product(req.body); await p.save(); res.status(201).json(p); });
-app.put('/api/products/:id', async (req, res) => { const p = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(p); });
-app.delete('/api/products/:id', async (req, res) => { await Product.findByIdAndDelete(req.params.id); res.json({ message: 'Deleted' }); });
+app.get('/api/products', async (req, res) => { 
+    try {
+        const p = await Product.find().sort({ _id: -1 }); 
+        res.json(p); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.post('/api/products', async (req, res) => { 
+    try {
+        const p = new Product(req.body); await p.save(); res.status(201).json(p); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.put('/api/products/:id', async (req, res) => { 
+    try {
+        const p = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(p); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.delete('/api/products/:id', async (req, res) => { 
+    try {
+        await Product.findByIdAndDelete(req.params.id); res.json({ message: 'Deleted' }); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
 
 // 3. Order Routes
 app.get('/api/orders', async (req, res) => { 
-    const { userId } = req.query; 
-    const q = userId ? { userId } : {};
-    const o = await Order.find(q).sort({ date: -1 }); 
-    res.json(o); 
+    try {
+        const { userId } = req.query; 
+        const q = userId ? { userId } : {};
+        const o = await Order.find(q).sort({ date: -1 }); 
+        res.json(o); 
+    } catch (e) { res.status(500).json({message: e.message}); }
 });
-app.post('/api/orders', async (req, res) => { const o = new Order(req.body); await o.save(); res.status(201).json(o); });
-app.put('/api/orders/:id', async (req, res) => { const o = await Order.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(o); });
+app.post('/api/orders', async (req, res) => { 
+    try {
+        const o = new Order(req.body); await o.save(); res.status(201).json(o); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.put('/api/orders/:id', async (req, res) => { 
+    try {
+        const o = await Order.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(o); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
 
 // 4. Slide Routes
-app.get('/api/slides', async (req, res) => { const s = await Slide.find(); res.json(s); });
-app.post('/api/slides', async (req, res) => { const s = new Slide(req.body); await s.save(); res.status(201).json(s); });
-app.put('/api/slides/:id', async (req, res) => { const s = await Slide.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(s); });
-app.delete('/api/slides/:id', async (req, res) => { await Slide.findByIdAndDelete(req.params.id); res.json({message:'Deleted'}); });
+app.get('/api/slides', async (req, res) => { 
+    try {
+        const s = await Slide.find(); res.json(s); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.post('/api/slides', async (req, res) => { 
+    try {
+        const s = new Slide(req.body); await s.save(); res.status(201).json(s); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.put('/api/slides/:id', async (req, res) => { 
+    try {
+        const s = await Slide.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(s); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.delete('/api/slides/:id', async (req, res) => { 
+    try {
+        await Slide.findByIdAndDelete(req.params.id); res.json({message:'Deleted'}); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
 
 // 5. Stats Routes
 app.get('/api/stats', async (req, res) => { 
-    const all = await Visitor.find(); 
-    const total = all.reduce((s,v)=>s+v.count,0); 
-    res.json({totalVisits: total, todayVisits: 0}); 
+    try {
+        const all = await Visitor.find(); 
+        const total = all.reduce((s,v)=>s+v.count,0); 
+        res.json({totalVisits: total, todayVisits: 0}); 
+    } catch (e) { res.status(500).json({message: e.message}); }
 });
 app.post('/api/stats/visit', async (req, res) => {
-    const today = new Date().toLocaleDateString('tr-TR');
-    let v = await Visitor.findOne({date: today});
-    if(v) v.count++; else v = new Visitor({date: today, count: 1});
-    await v.save();
-    res.json({success: true});
+    try {
+        const today = new Date().toLocaleDateString('tr-TR');
+        let v = await Visitor.findOne({date: today});
+        if(v) v.count++; else v = new Visitor({date: today, count: 1});
+        await v.save();
+        res.json({success: true});
+    } catch (e) { res.status(500).json({message: e.message}); }
 });
 
 // 6. Analytics Routes
-app.get('/api/analytics/dashboard', async (req, res) => { res.json({totalProductViews:0, totalAddToCart:0, totalCheckouts:0, avgSessionDuration:0, topViewedProducts:[], topAddedProducts:[], activityTimeline:[]}); });
-app.post('/api/analytics/event', async (req, res) => { const e = new Analytics(req.body); await e.save(); res.json({success:true}); });
+app.get('/api/analytics/dashboard', async (req, res) => { 
+    try {
+        // Dummy implementation for now
+        res.json({totalProductViews:0, totalAddToCart:0, totalCheckouts:0, avgSessionDuration:0, topViewedProducts:[], topAddedProducts:[], activityTimeline:[]}); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.post('/api/analytics/event', async (req, res) => { 
+    try {
+        const e = new Analytics(req.body); await e.save(); res.json({success:true}); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
 
 // 7. Category Routes
-app.get('/api/categories', async (req, res) => { const c = await Category.find(); res.json(c); });
-app.post('/api/categories', async (req, res) => { const c = new Category(req.body); await c.save(); res.status(201).json(c); });
-app.put('/api/categories/:id', async (req, res) => { const c = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(c); });
-app.delete('/api/categories/:id', async (req, res) => { await Category.findByIdAndDelete(req.params.id); res.json({message:'Deleted'}); });
+app.get('/api/categories', async (req, res) => { 
+    try {
+        const c = await Category.find(); res.json(c); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.post('/api/categories', async (req, res) => { 
+    try {
+        const c = new Category(req.body); await c.save(); res.status(201).json(c); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.put('/api/categories/:id', async (req, res) => { 
+    try {
+        const c = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(c); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
+app.delete('/api/categories/:id', async (req, res) => { 
+    try {
+        await Category.findByIdAndDelete(req.params.id); res.json({message:'Deleted'}); 
+    } catch (e) { res.status(500).json({message: e.message}); }
+});
 
 // 8. Forum Routes
 app.get('/api/forum/topics', async (req, res) => {
@@ -296,7 +361,6 @@ app.get('/api/forum/topics', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
-
 app.post('/api/forum/topics', async (req, res) => {
     try {
         const newTopic = new ForumTopic(req.body);
@@ -306,12 +370,10 @@ app.post('/api/forum/topics', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
-
 app.post('/api/forum/topics/:id/comments', async (req, res) => {
     try {
         const topic = await ForumTopic.findOne({ id: req.params.id });
         if (!topic) return res.status(404).json({ message: 'Konu bulunamadı' });
-        
         topic.comments.push(req.body);
         await topic.save();
         res.status(201).json(req.body);
@@ -319,7 +381,6 @@ app.post('/api/forum/topics/:id/comments', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
-
 app.post('/api/forum/topics/:id/like', async (req, res) => {
     try {
         const topic = await ForumTopic.findOne({ id: req.params.id });
