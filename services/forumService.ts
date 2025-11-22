@@ -2,7 +2,7 @@ import { ForumTopic, ForumComment, User } from '../types';
 import { DB, getStorage, setStorage, delay } from './db';
 import { CONFIG } from './config';
 
-// Mock data fallback
+// Mock data fallback (Yedek Veri)
 const MOCK_TOPICS: ForumTopic[] = [
   {
     id: 'TOPIC-001',
@@ -42,9 +42,9 @@ export const forumService = {
   },
 
   async createTopic(user: User, title: string, content: string, category: ForumTopic['category'], tags: string[]): Promise<ForumTopic> {
-    const newTopic: ForumTopic = {
-      id: `TOPIC-${Date.now()}`,
-      authorId: user.id,
+    // Frontend tarafında ID OLUŞTURMUYORUZ. Sadece veriyi hazırlıyoruz.
+    const topicData = {
+      authorId: user._id || user.id, // Kullanıcının _id'sini kullanmaya çalış
       authorName: user.name,
       title,
       content,
@@ -59,24 +59,27 @@ export const forumService = {
     if (CONFIG.USE_MOCK_API) {
         await delay(800);
         const topics = getStorage<ForumTopic[]>(DB.FORUM_TOPICS, []);
+        // Mock modunda elle ID veriyoruz mecburen
+        const newTopic = { ...topicData, id: `TOPIC-${Date.now()}` } as ForumTopic;
         topics.unshift(newTopic);
         setStorage(DB.FORUM_TOPICS, topics);
         return newTopic;
     } else {
         // REAL BACKEND
+        // Backend'e ID'siz gönderiyoruz, o bize _id'li geri veriyor.
         const response = await fetch(`${CONFIG.API_URL}/forum/topics`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newTopic)
+            body: JSON.stringify(topicData)
         });
         return await response.json();
     }
   },
 
   async addComment(topicId: string, user: User, content: string): Promise<ForumComment> {
-    const newComment: ForumComment = {
-      id: `CMT-${Date.now()}`,
-      authorId: user.id,
+    const newComment = {
+      // id: ...  <-- Yorum ID'sini de sunucuya bırakabiliriz veya şimdilik böyle kalabilir
+      authorId: user._id || user.id,
       authorName: user.name,
       content,
       date: new Date().toLocaleDateString('tr-TR'),
@@ -88,11 +91,15 @@ export const forumService = {
         const topics = getStorage<ForumTopic[]>(DB.FORUM_TOPICS, []);
         const topicIndex = topics.findIndex(t => t.id === topicId);
         if (topicIndex === -1) throw new Error('Konu bulunamadı');
-        topics[topicIndex].comments.push(newComment);
+        
+        // Mock için ID ekle
+        const mockComment = { ...newComment, id: `CMT-${Date.now()}` } as ForumComment;
+        topics[topicIndex].comments.push(mockComment);
         setStorage(DB.FORUM_TOPICS, topics);
-        return newComment;
+        return mockComment;
     } else {
         // REAL BACKEND
+        // topicId burada MongoDB'nin _id'si olmalı
         const response = await fetch(`${CONFIG.API_URL}/forum/topics/${topicId}/comments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -112,6 +119,7 @@ export const forumService = {
         }
     } else {
         // REAL BACKEND
+        // topicId'nin _id olduğundan emin olmalısın
         await fetch(`${CONFIG.API_URL}/forum/topics/${topicId}/like`, {
             method: 'POST'
         });
