@@ -19,18 +19,15 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // --- SCHEMAS & MODELS ---
 
-// Product Schema (ID field is Number to match Frontend)
+// ✅ DOĞRUSU BÖYLE OLMALI:
 const productSchema = new mongoose.Schema({
-  id: { type: Number, required: true, unique: true }, 
-  name: String,
-  description: String,
-  price: Number,
-  category: String,
-  image: String,
-  images: [String],
-  rating: Number,
-  features: [String],
-  stock: Number
+    // "id" satırı YOK. Silindi.
+    name: { type: String, required: true },
+    category: { type: String, required: true },
+    price: { type: Number, required: true },
+    image: { type: String },
+    // ... diğer alanlar
+});
 });
 const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
 
