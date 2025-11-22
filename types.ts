@@ -19,7 +19,6 @@ export interface CategoryItem {
   count: string;
   className?: string;
 }
-}
 
 export interface Product {
   id: number;
