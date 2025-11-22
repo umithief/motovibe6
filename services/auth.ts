@@ -44,17 +44,9 @@ export const authService = {
             const user = await response.json();
             this.setSession(user, true);
             
-            // Backend kendi logunu tutabilir ama frontend tarafında da güncelleyelim
-            if(CONFIG.USE_MOCK_API) {
-                 await logService.addLog('info', 'Yeni Üye Kaydı', `Kullanıcı: ${user.name}`);
-            }
-            
             return user;
         } catch (error: any) {
             console.error("Register Error:", error);
-            if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-                throw new Error('Sunucuya bağlanılamadı. Backend sunucusunu (node server.js) başlattınız mı?');
-            }
             throw error;
         }
     }
@@ -63,34 +55,17 @@ export const authService = {
   async login(email: string, password: string, rememberMe: boolean = false): Promise<User> {
     if (CONFIG.USE_MOCK_API) {
         await delay(800);
-        // Admin Backdoor (Demo)
-        if (email === '111@111' && password === '111') {
-            const adminUser: User = {
-                id: 'admin-001',
-                name: 'MotoVibe Admin',
-                email: '111@111',
-                joinDate: '01.01.2024',
-                isAdmin: true,
-                address: 'HQ'
-            };
-            this.setSession(adminUser, rememberMe);
-            await logService.addLog('warning', 'Admin Girişi', 'Süper kullanıcı oturum açtı.');
-            return adminUser;
-        }
-
         const users = getStorage<User[]>(DB.USERS, []);
         const user = users.find(u => u.email === email && u.password === password);
 
         if (!user) {
-            // Hatalı giriş denemesi (Opsiyonel log)
-            // await logService.addLog('error', 'Hatalı Giriş Denemesi', `Email: ${email}`);
             throw new Error('E-posta veya şifre hatalı.');
         }
 
         this.setSession(user, rememberMe);
         return user;
     } else {
-        // REAL BACKEND
+        // REAL BACKEND - BACKDOOR REMOVED
         try {
             const response = await fetch(`${CONFIG.API_URL}/auth/login`, {
                 method: 'POST',
@@ -107,9 +82,6 @@ export const authService = {
             return user;
         } catch (error: any) {
             console.error("Login Error:", error);
-            if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-                throw new Error('Sunucuya bağlanılamadı. Backend sunucusunu (node server.js) başlattınız mı?');
-            }
             throw error;
         }
     }
