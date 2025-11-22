@@ -1,4 +1,3 @@
-
 import { Slide } from '../types';
 import { DB, getStorage, setStorage, delay } from './db';
 import { DEFAULT_SLIDES } from '../constants';
@@ -26,14 +25,16 @@ export const sliderService = {
     }
   },
 
-  async addSlide(slide: Omit<Slide, 'id'>): Promise<Slide> {
+  // DÜZELTME 1: id alanını hariç tutuyoruz, backend verecek.
+  async addSlide(slide: Omit<Slide, '_id' | 'id'>): Promise<Slide> {
     if (CONFIG.USE_MOCK_API) {
         await delay(500);
         const slides = getStorage<Slide[]>(DB.SLIDES, []);
         const newSlide: Slide = {
             ...slide,
-            id: Date.now(),
-        };
+            // Mock için hala sayı kullanabiliriz veya string yapabiliriz
+            id: Date.now(), 
+        } as any; // Tip uyuşmazlığını önlemek için as any
         slides.push(newSlide);
         setStorage(DB.SLIDES, slides);
         return newSlide;
@@ -48,11 +49,13 @@ export const sliderService = {
     }
   },
 
-  async deleteSlide(id: number): Promise<void> {
+  // DÜZELTME 2: id tipi 'number' değil 'string' olmalı
+  async deleteSlide(id: string): Promise<void> {
     if (CONFIG.USE_MOCK_API) {
         await delay(300);
         const slides = getStorage<Slide[]>(DB.SLIDES, []);
-        const filtered = slides.filter(s => s.id !== id);
+        // Mock verilerde id number olabilir, string'e çevirip kıyasla
+        const filtered = slides.filter(s => String(s.id) !== id);
         setStorage(DB.SLIDES, filtered);
     } else {
         // REAL BACKEND
@@ -73,7 +76,10 @@ export const sliderService = {
         }
     } else {
         // REAL BACKEND
-        await fetch(`${CONFIG.API_URL}/slides/${slide.id}`, {
+        // DÜZELTME 3: slide._id kullanıyoruz
+        const idToUpdate = slide._id || slide.id;
+        
+        await fetch(`${CONFIG.API_URL}/slides/${idToUpdate}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(slide)
