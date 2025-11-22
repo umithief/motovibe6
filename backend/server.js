@@ -9,10 +9,11 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // --- VERİTABANI BAĞLANTISI ---
-// Lütfen aşağıdaki linkte yer alan:
-// 1. <password> yerine kendi şifrenizi yazın.
-// 2. xxxxx kısmını kendi cluster adresinizle değiştirin.
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://umithief:14531453@motovibe.mslnxhq.mongodb.net/?appName=motovibe';
+
+if (MONGO_URI.includes('<password>')) {
+  console.warn('⚠️ UYARI: MongoDB bağlantı adresindeki <password> alanını değiştirmediniz.');
+}
 
 // Middleware
 app.use(cors({
@@ -130,6 +131,20 @@ const ForumTopic = mongoose.models.ForumTopic || mongoose.model('ForumTopic', fo
 // --- DATA SEEDING ---
 const seedDatabase = async () => {
     try {
+        // 0. Seed Admin User if not exists
+        const adminCount = await User.countDocuments({ isAdmin: true });
+        if (adminCount === 0) {
+            console.log('🔒 Varsayılan Admin hesabı oluşturuluyor...');
+            const adminUser = new User({
+                name: 'MotoVibe Admin',
+                email: 'admin@motovibe.tr',
+                password: 'admin123', // Gerçek projede hashlenmeli
+                isAdmin: true,
+                joinDate: new Date().toLocaleDateString('tr-TR')
+            });
+            await adminUser.save();
+        }
+
         const catCount = await Category.countDocuments();
         if (catCount === 0) {
             console.log('📦 Kategoriler veritabanına ekleniyor...');
@@ -206,25 +221,17 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// ADMIN LOGIN (BACKDOOR + DB CHECK)
+// ADMIN LOGIN (ONLY DB CHECK - NO BACKDOOR)
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    // 1. BACKDOOR: Acil durum admin girişi (Veritabanı boşsa bile çalışır)
-    if (email === 'admin@motovibe.tr' && password === 'admin123') {
-      return res.json({ 
-          id: 'admin-001', 
-          name: 'MotoVibe Admin', 
-          email: 'admin@motovibe.tr', 
-          isAdmin: true, 
-          joinDate: '01.01.2024' 
-      });
-    }
-
-    // 2. DB CHECK: Normal kullanıcı kontrolü
+    // Sadece veritabanını kontrol et
     const user = await User.findOne({ email, password });
-    if (!user) return res.status(400).json({ message: 'Hatalı e-posta veya şifre.' });
+    
+    if (!user) {
+        return res.status(400).json({ message: 'Hatalı e-posta veya şifre.' });
+    }
     
     const userObj = user.toObject();
     delete userObj.password;
@@ -320,8 +327,74 @@ app.post('/api/stats/visit', async (req, res) => {
 // 6. Analytics Routes
 app.get('/api/analytics/dashboard', async (req, res) => { 
     try {
-        // Dummy implementation for now
-        res.json({totalProductViews:0, totalAddToCart:0, totalCheckouts:0, avgSessionDuration:0, topViewedProducts:[], topAddedProducts:[], activityTimeline:[]}); 
+        const { range } = req.query;
+        const now = Date.now();
+        let startTime = 0;
+        if (range === '24h') startTime = now - (24 * 60 * 60 * 1000);
+        else if (range === '7d') startTime = now - (7 * 24 * 60 * 60 * 1000);
+        else if (range === '30d') startTime = now - (30 * 24 * 60 * 60 * 1000);
+        
+        const events = await Analytics.find({ timestamp: { $gte: startTime } });
+        
+        // Aggregation Logic
+        const productViews = {};
+        const productAdds = {};
+        let totalProductViews = 0;
+        let totalAddToCart = 0;
+        let totalCheckouts = 0;
+        let totalDuration = 0;
+        let durationCount = 0;
+
+        let activityTimeline = [];
+        if (range === '24h') {
+            const currentHour = new Date().getHours();
+            activityTimeline = Array.from({length: 12}, (_, i) => {
+                const h = (currentHour - 11 + i + 24) % 24;
+                return { label: `${h}:00`, value: 0 };
+            });
+            events.forEach(e => {
+                const h = new Date(e.timestamp).getHours();
+                const label = `${h}:00`;
+                const bucket = activityTimeline.find(b => b.label === label);
+                if(bucket) bucket.value++;
+            });
+        } else {
+             const daysCount = range === '7d' ? 7 : 30;
+             for (let i = daysCount - 1; i >= 0; i--) {
+                 const d = new Date(now - (i * 24 * 60 * 60 * 1000));
+                 const label = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+                 activityTimeline.push({ label, value: 0 });
+             }
+             events.forEach(e => {
+                 const d = new Date(e.timestamp);
+                 const label = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+                 const bucket = activityTimeline.find(b => b.label === label);
+                 if(bucket) bucket.value++;
+             });
+        }
+
+        events.forEach(e => {
+            if (e.type === 'view_product') {
+                totalProductViews++;
+                if (e.productName) productViews[e.productName] = (productViews[e.productName] || 0) + 1;
+            } else if (e.type === 'add_to_cart') {
+                totalAddToCart++;
+                if (e.productName) productAdds[e.productName] = (productAdds[e.productName] || 0) + 1;
+            } else if (e.type === 'checkout_start') {
+                totalCheckouts++;
+            } else if (e.type === 'session_duration' && e.duration) {
+                totalDuration += e.duration;
+                durationCount++;
+            }
+        });
+
+        const topViewedProducts = Object.entries(productViews).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+        const topAddedProducts = Object.entries(productAdds).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+        const avgSessionDuration = durationCount > 0 ? Math.round(totalDuration / durationCount) : 0;
+
+        res.json({
+            totalProductViews, totalAddToCart, totalCheckouts, avgSessionDuration, topViewedProducts, topAddedProducts, activityTimeline
+        });
     } catch (e) { res.status(500).json({message: e.message}); }
 });
 app.post('/api/analytics/event', async (req, res) => { 
