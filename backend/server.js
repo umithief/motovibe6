@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 5000;
 // Güvenlik için bu bilgiyi .env dosyasında saklamanız önerilir.
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://umithief:14531453@motovibe.mslnxhq.mongodb.net/?appName=motovibe';
 
-if (MONGO_URI.includes('<password>')) {
+if (MONGO_URI.includes('14531453')) {
   console.warn('⚠️ DİKKAT: MongoDB bağlantı adresindeki <password> alanını değiştirmediniz. Sunucu veritabanına bağlanamayabilir.');
 }
 
