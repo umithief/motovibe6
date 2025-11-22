@@ -19,15 +19,17 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // --- SCHEMAS & MODELS ---
 
-// ✅ DOĞRUSU BÖYLE OLMALI:
+// Product Schema (Düzeltilmiş Hali)
 const productSchema = new mongoose.Schema({
-    // "id" satırı YOK. Silindi.
-    name: { type: String, required: true },
-    category: { type: String, required: true },
-    price: { type: Number, required: true },
-    image: { type: String },
-    // ... diğer alanlar
-});
+    name: String,
+    description: String,
+    price: Number,
+    category: String,
+    image: String,
+    images: [String],
+    rating: Number,
+    features: [String],
+    stock: Number
 });
 const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
 
