@@ -97,7 +97,7 @@ const Analytics = mongoose.models.Analytics || mongoose.model('Analytics', analy
 
 const categorySchema = new mongoose.Schema({
     name: { type: String, required: true },
-    type: { type: String, required: true },
+    type: { type: String, default: 'Genel' },
     image: { type: String, required: true },
     desc: String,
     count: String,
