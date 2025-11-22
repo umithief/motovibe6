@@ -17,5 +17,5 @@ const USE_MOCK = false;
 
 export const CONFIG = {
     USE_MOCK_API: USE_MOCK, 
-    API_URL: env.VITE_API_URL || 'http://localhost:5000/api'
+    API_URL: env.VITE_API_URL || 'https://motovibe2.onrender.com/api'
 };
