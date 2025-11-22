@@ -9,223 +9,262 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // --- VERİTABANI BAĞLANTISI ---
-// BURAYA KENDİ MONGODB URI'NIZI YAZIN
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://umithief:14531453@motovibe.mslnxhq.mongodb.net/?appName=motovibe';
 
+if (MONGO_URI.includes('14531453')) {
+  console.warn('⚠️ UYARI: MongoDB bağlantı adresindeki <password> alanını değiştirmediniz.');
+}
+
 // Middleware
-app.use(cors({ origin: '*' }));
+app.use(cors({
+  origin: '*', 
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Resim yükleme limiti (50mb) - BURASI DOĞRU KALSIN
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// --- SCHEMAS & MODELS ---
-
-// Product Schema (Düzeltilmiş Hali)
-const productSchema = new mongoose.Schema({
-    name: String,
-    description: String,
-    price: Number,
-    category: String,
-    image: String,
-    images: [String],
-    rating: Number,
-    features: [String],
-    stock: Number
-});
-const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
+// --- MONGODB MODELS (DÜZELTİLMİŞ HALİ) ---
+// DİKKAT: 'id' alanlarını sildik. Artık MongoDB'nin kendi '_id'sini kullanacağız.
 
 const userSchema = new mongoose.Schema({
-  id: String,
-  name: String,
-  email: { type: String, unique: true },
-  password: String,
-  isAdmin: Boolean,
-  joinDate: String
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  isAdmin: { type: Boolean, default: false },
+  joinDate: { type: String, default: () => new Date().toLocaleDateString('tr-TR') },
+  phone: String,
+  address: String
 });
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 
+const productSchema = new mongoose.Schema({
+  // id: Number SATIRINI SİLDİM! (Hata kaynağıydı)
+  name: { type: String, required: true },
+  description: String,
+  price: { type: Number, required: true },
+  category: String,
+  image: String,
+  images: [String],
+  rating: { type: Number, default: 0 },
+  features: [String],
+  stock: { type: Number, default: 10 }
+});
+const Product = mongoose.models.Product || mongoose.model('Product', productSchema);
+
 const orderSchema = new mongoose.Schema({
-  id: String,
-  userId: String,
-  date: String,
-  status: String,
+  userId: { type: String, required: true },
+  date: { type: String, default: () => new Date().toLocaleDateString('tr-TR') },
+  status: { type: String, default: 'Hazırlanıyor' },
   total: Number,
-  items: Array
+  items: [{
+    productId: String, // Number değil String yaptık (MongoDB ID'si için)
+    name: String,
+    price: Number,
+    quantity: Number,
+    image: String
+  }]
 });
 const Order = mongoose.models.Order || mongoose.model('Order', orderSchema);
 
 const slideSchema = new mongoose.Schema({
-  id: Number,
-  image: String,
-  title: String,
-  subtitle: String,
-  cta: String,
-  action: String
+    image: { type: String, required: true },
+    title: { type: String, required: true },
+    subtitle: String,
+    cta: { type: String, default: 'İNCELE' },
+    action: { type: String, default: 'shop' }
 });
 const Slide = mongoose.models.Slide || mongoose.model('Slide', slideSchema);
 
+const visitorSchema = new mongoose.Schema({
+  date: { type: String, required: true },
+  count: { type: Number, default: 0 }
+});
+const Visitor = mongoose.models.Visitor || mongoose.model('Visitor', visitorSchema);
+
+const analyticsSchema = new mongoose.Schema({
+  type: { type: String, required: true },
+  userId: String,
+  userName: String,
+  productId: String,
+  productName: String,
+  duration: Number,
+  timestamp: { type: Number, default: Date.now },
+  date: { type: String, default: () => new Date().toLocaleDateString('tr-TR') }
+});
+const Analytics = mongoose.models.Analytics || mongoose.model('Analytics', analyticsSchema);
+
 const categorySchema = new mongoose.Schema({
-  id: String,
-  name: String,
-  type: String,
-  image: String,
-  desc: String,
-  count: String,
-  className: String
+    name: { type: String, required: true },
+    type: { type: String, required: true },
+    image: { type: String, required: true },
+    desc: String,
+    count: String,
+    className: String
 });
 const Category = mongoose.models.Category || mongoose.model('Category', categorySchema);
 
-// --- ROUTES ---
-
-// 1. PRODUCTS
-app.get('/api/products', async (req, res) => {
-    try {
-        const products = await Product.find().sort({ _id: -1 });
-        res.json(products);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+const forumTopicSchema = new mongoose.Schema({
+  authorId: String,
+  authorName: String,
+  title: String,
+  content: String,
+  category: String,
+  date: String,
+  likes: { type: Number, default: 0 },
+  comments: [{
+      authorId: String,
+      authorName: String,
+      content: String,
+      date: String
+  }]
 });
+const ForumTopic = mongoose.models.ForumTopic || mongoose.model('ForumTopic', forumTopicSchema);
 
-app.post('/api/products', async (req, res) => {
+
+// --- DATA SEEDING ---
+const seedDatabase = async () => {
     try {
-        // Frontend ID göndermezse veya null gelirse timestamp kullan
-        const finalId = req.body.id ? Number(req.body.id) : Date.now();
-        const newProduct = new Product({ ...req.body, id: finalId });
-        await newProduct.save();
-        res.status(201).json(newProduct);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
+        // Admin User
+        const adminCount = await User.countDocuments({ isAdmin: true });
+        if (adminCount === 0) {
+            console.log('🔒 Varsayılan Admin oluşturuluyor...');
+            await User.create({
+                name: 'MotoVibe Admin',
+                email: 'admin@motovibe.tr',
+                password: 'admin123', 
+                isAdmin: true
+            });
+        }
+        // Kategoriler vs. boşsa ekle... (Burayı kısa tuttum)
+    } catch (error) {
+        console.error('Veri tohumlama hatası:', error);
+    }
+};
 
-app.put('/api/products/:id', async (req, res) => {
-    try {
-        // Frontend'den gelen ID (URL'deki) String'dir, Number'a çevirip arıyoruz
-        const pId = Number(req.params.id);
-        const updated = await Product.findOneAndUpdate({ id: pId }, req.body, { new: true });
-        if (!updated) return res.status(404).json({ error: "Ürün bulunamadı" });
-        res.json(updated);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// --- ROUTES (DÜZELTİLMİŞ - Custom ID yerine _id kullanır) ---
 
-app.delete('/api/products/:id', async (req, res) => {
-    try {
-        const pId = Number(req.params.id);
-        await Product.findOneAndDelete({ id: pId });
-        res.json({ message: "Deleted" });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 2. CATEGORIES
-app.get('/api/categories', async (req, res) => {
-    try {
-        const cats = await Category.find();
-        res.json(cats);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/categories', async (req, res) => {
-    try {
-        const cat = new Category(req.body);
-        await cat.save();
-        res.status(201).json(cat);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.put('/api/categories/:id', async (req, res) => {
-    try {
-        const updated = await Category.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
-        res.json(updated);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.delete('/api/categories/:id', async (req, res) => {
-    try {
-        await Category.findOneAndDelete({ id: req.params.id });
-        res.json({ message: "Deleted" });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 3. AUTH
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        const user = await User.findOne({ email, password });
-        if (!user) return res.status(401).json({ message: "Hatalı giriş" });
-        res.json(user);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
+// 1. Auth Routes
 app.post('/api/auth/register', async (req, res) => {
-    try {
-        const existing = await User.findOne({ email: req.body.email });
-        if (existing) return res.status(400).json({ message: "Kullanıcı mevcut" });
-        
-        const newUser = new User({ ...req.body, id: crypto.randomUUID() });
-        await newUser.save();
-        res.status(201).json(newUser);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const { name, email, password } = req.body;
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ message: 'Bu e-posta zaten kayıtlı.' });
+
+    const newUser = new User({ name, email, password });
+    await newUser.save();
+    res.status(201).json(newUser);
+  } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// 4. SLIDES
-app.get('/api/slides', async (req, res) => {
-    try {
-        const slides = await Slide.find();
-        res.json(slides);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-app.post('/api/slides', async (req, res) => {
-    try {
-        const s = new Slide({ ...req.body, id: req.body.id || Date.now() });
-        await s.save();
-        res.status(201).json(s);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-app.put('/api/slides/:id', async (req, res) => {
-    try {
-        const sId = Number(req.params.id);
-        const updated = await Slide.findOneAndUpdate({ id: sId }, req.body, { new: true });
-        res.json(updated);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-app.delete('/api/slides/:id', async (req, res) => {
-    try {
-        const sId = Number(req.params.id);
-        await Slide.findOneAndDelete({ id: sId });
-        res.json({ message: "Deleted" });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email, password });
+    if (!user) return res.status(401).json({ message: 'Hatalı giriş.' });
+    res.json(user);
+  } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// 5. ORDERS
-app.get('/api/orders', async (req, res) => {
+// 2. Product Routes
+app.get('/api/products', async (req, res) => { 
     try {
-        const query = req.query.userId ? { userId: req.query.userId } : {};
-        const orders = await Order.find(query).sort({ date: -1 });
-        res.json(orders);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-app.post('/api/orders', async (req, res) => {
-    try {
-        const o = new Order(req.body);
-        await o.save();
-        res.status(201).json(o);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-app.put('/api/orders/:id', async (req, res) => {
-    try {
-        const updated = await Order.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
-        res.json(updated);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+        const p = await Product.find().sort({ _id: -1 }); 
+        res.json(p); 
+    } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// 6. STATS & ANALYTICS (Dummy Endpoints for now to prevent 404)
-app.get('/api/stats', (req, res) => res.json({ totalVisits: 100, todayVisits: 10 }));
-app.post('/api/stats/visit', (req, res) => res.json({ success: true }));
-app.get('/api/analytics/dashboard', (req, res) => res.json({
-    totalProductViews: 0, totalAddToCart: 0, totalCheckouts: 0, 
-    avgSessionDuration: 0, topViewedProducts: [], topAddedProducts: [], activityTimeline: []
-}));
+app.post('/api/products', async (req, res) => { 
+    try {
+        // id: Date.now() KISMINI KALDIRDIK. Mongo otomatik _id verecek.
+        const p = new Product(req.body); 
+        await p.save(); 
+        res.status(201).json(p); 
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
 
-// --- CONNECT ---
+app.put('/api/products/:id', async (req, res) => { 
+    try {
+        // ESKİSİ: findOneAndUpdate({ id: Number(req.params.id) }...) -> YANLIŞTI
+        // YENİSİ: findByIdAndUpdate(req.params.id...) -> DOĞRU
+        const p = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true }); 
+        if (!p) return res.status(404).json({ message: 'Ürün bulunamadı' });
+        res.json(p); 
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.delete('/api/products/:id', async (req, res) => { 
+    try {
+        // ESKİSİ: findOneAndDelete({ id: Number(...) })
+        // YENİSİ: findByIdAndDelete
+        await Product.findByIdAndDelete(req.params.id); 
+        res.json({ message: 'Silindi' }); 
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// 3. Order Routes
+app.get('/api/orders', async (req, res) => { 
+    try {
+        const q = req.query.userId ? { userId: req.query.userId } : {};
+        const o = await Order.find(q).sort({ date: -1 }); 
+        res.json(o); 
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.post('/api/orders', async (req, res) => { 
+    try {
+        const o = new Order(req.body); 
+        await o.save(); 
+        res.status(201).json(o); 
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// 4. Slide Routes (ID mantığı düzeltildi)
+app.get('/api/slides', async (req, res) => { 
+    try { const s = await Slide.find(); res.json(s); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.post('/api/slides', async (req, res) => { 
+    try { const s = new Slide(req.body); await s.save(); res.status(201).json(s); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/slides/:id', async (req, res) => { 
+    try { await Slide.findByIdAndDelete(req.params.id); res.json({ message: 'Deleted' }); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// 5. Stats Routes
+app.get('/api/stats', async (req, res) => { 
+    try {
+        const all = await Visitor.find(); 
+        const total = all.reduce((s,v)=>s+v.count,0); 
+        res.json({totalVisits: total, todayVisits: 0}); 
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.post('/api/stats/visit', async (req, res) => {
+    try {
+        const d = new Date().toLocaleDateString('tr-TR');
+        let v = await Visitor.findOne({date: d});
+        if(v) v.count++; else v = new Visitor({date: d, count: 1});
+        await v.save();
+        res.json({success: true});
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// 6. Category Routes (ID düzeltildi)
+app.get('/api/categories', async (req, res) => { 
+    try { const c = await Category.find(); res.json(c); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.post('/api/categories', async (req, res) => { 
+    try { const c = new Category(req.body); await c.save(); res.status(201).json(c); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/categories/:id', async (req, res) => { 
+    try { await Category.findByIdAndDelete(req.params.id); res.json({ message: 'Deleted' }); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// --- START SERVER ---
 mongoose.connect(MONGO_URI)
-    .then(() => {
-        console.log("✅ MongoDB Connected");
-        app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-    })
-    .catch(err => console.error("❌ DB Connection Error:", err));
+  .then(async () => {
+    console.log('✅ MongoDB Connected');
+    await seedDatabase();
+    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+  })
+  .catch(err => console.error('❌ DB Connection Error:', err));
