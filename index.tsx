@@ -3,7 +3,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { CONFIG } from './services/config';
-import { LanguageProvider } from './contexts/LanguageContext';
+import { LanguageProvider } from './contexts/LanguageProvider';
 
 async function enableMocking() {
   // Only enable MSW if we are NOT using the internal Mock API mode (localStorage)
