@@ -1,748 +1,613 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Product, CartItem, ProductCategory, ViewState, User, AuthMode } from './types';
-import { Navbar } from './components/Navbar';
-import { Hero } from './components/Hero';
-import { ProductCard } from './components/ProductCard';
-import { ProductDetail } from './components/ProductDetail';
-import { CartDrawer } from './components/CartDrawer';
-import { AIChat } from './components/AIChat';
-import { Button } from './components/Button';
+import { Product, CartItem, ProductCategory, User, AuthMode, Route as RouteType, ViewState, ColorTheme } from './types';
+import { Navbar } from './components/layout/Navbar';
+import { BottomNav } from './components/layout/BottomNav';
+import { CartDrawer } from './components/layout/CartDrawer';
 import { AuthModal } from './components/AuthModal';
 import { PaymentModal } from './components/PaymentModal';
 import { UserProfile } from './components/UserProfile';
+import { PublicProfile } from './components/PublicProfile';
 import { About } from './components/About';
 import { Forum } from './components/Forum';
 import { AdminPanel } from './components/AdminPanel';
-import { SupportChatWidget } from './components/SupportChatWidget';
 import { ProductQuickViewModal } from './components/ProductQuickViewModal';
-import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
-import { CategoryGrid } from './components/CategoryGrid'; 
+import { ToastType, ToastContainer, ToastMessage } from './components/Toast';
 import { RideMode } from './components/RideMode'; 
+import { MotoTool } from './components/MotoTool';
+import { RouteExplorer } from './components/RouteExplorer';
+import { MotoMeetup } from './components/MotoMeetup';
+import { FlyToCart } from './components/FlyToCart';
+import { Blog } from './components/Blog';
+import { ServiceFinder } from './components/ServiceFinder';
+import { IntroAnimation } from './components/IntroAnimation';
+import { OnboardingTour } from './components/OnboardingTour'; 
+import { CompareBar } from './components/CompareBar';
+import { CompareModal } from './components/CompareModal';
+import { ScrollProgress } from './components/ScrollProgress';
+import { ProModal } from './components/ProModal';
+import { FeedbackModal } from './components/FeedbackModal';
+import { MotoValuation } from './components/MotoValuation';
+import { ThemeModal } from './components/ThemeModal';
+import { HelmetQRGenerator } from './components/HelmetQRGenerator';
+import { MotoVlogMap } from './components/MotoVlogMap';
+import { LifeSaver } from './components/LifeSaver';
+import { LivingBackground } from './components/LivingBackground';
+import { RidersDirectory } from './components/RidersDirectory';
 import { authService } from './services/auth';
 import { orderService } from './services/orderService';
 import { productService } from './services/productService';
 import { statsService } from './services/statsService';
-import { ArrowRight, Zap, Heart, Lock, ArrowUpDown, ArrowUp, Bike } from 'lucide-react';
+import { tourService } from './services/tourService';
+import { recordingService } from './services/recordingService'; 
+import { notify } from './services/notificationService';
+import { gamificationService } from './services/gamificationService';
+import { useAppSounds } from './hooks/useAppSounds';
+import { ArrowUp, Zap, Instagram, Twitter, Youtube, Facebook, MapPin, Phone, Mail } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useLivingTime } from './hooks/useLivingTime';
+
+// Import Components
+import { Home } from './components/Home';
+import { Shop } from './components/Shop';
+import { Favorites } from './components/Favorites';
+import { AIAssistantPage } from './components/AIAssistantPage';
+import { ProductDetail } from './components/ProductDetail';
 
 export const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('home');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'ALL'>('ALL');
-  const [sortOption, setSortOption] = useState<string>('default');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
   const [products, setProducts] = useState<Product[]>([]);
-  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
-  
-  // Scroll to Top State
-  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [initialShopCategory, setInitialShopCategory] = useState<ProductCategory | 'ALL'>('ALL');
 
-  // Toast State
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+  const [compareList, setCompareList] = useState<Product[]>([]);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+
+  const [showScrollTop, setShowScrollTop] = useState(false);
   
-  // Loading State
-  const [isAppLoading, setIsAppLoading] = useState(true);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [bootState, setBootState] = useState<'idle' | 'complete'>('idle');
+  const [showTour, setShowTour] = useState(false); 
   
-  // Auth States
   const [user, setUser] = useState<User | null>(null);
+  const [viewingUser, setViewingUser] = useState<User | null>(null);
+
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
-
-  // Payment States
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
-
-  // Quick View State
+  const [isProModalOpen, setIsProModalOpen] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [activeRoute, setActiveRoute] = useState<RouteType | null>(null);
+  
+  const [flyingItems, setFlyingItems] = useState<Array<{ id: number; image: string; startRect: any; targetRect: any }>>([]);
 
-  // Session Tracking
-  const sessionStartTime = useRef(Date.now());
-  const userRef = useRef<User | null>(null); // Ref to hold current user for cleanup function
-
-  // Update user ref whenever user state changes
+  // Fixed Light Mode
   useEffect(() => {
-    userRef.current = user;
-  }, [user]);
+    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.add('light');
+  }, []);
 
-  // Toast Helper
+  const [colorTheme, setColorTheme] = useState<ColorTheme>(() => {
+      const saved = localStorage.getItem('mv_color_theme');
+      return (saved as ColorTheme) || 'orange';
+  });
+
+  const [animKey, setAnimKey] = useState(0);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const sessionStartTime = useRef(Date.now());
+  const userRef = useRef<User | null>(null);
+  
+  const { playSuccess, playClick } = useAppSounds();
+
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  useEffect(() => {
+      const root = window.document.documentElement;
+      root.setAttribute('data-theme', colorTheme);
+      localStorage.setItem('mv_color_theme', colorTheme);
+  }, [colorTheme]);
+
+  useEffect(() => {
+      const handleAnimChange = () => setAnimKey(prev => prev + 1);
+      window.addEventListener('anim-settings-changed', handleAnimChange);
+      
+      const handlePointsUpdate = async () => {
+          const freshUser = await authService.getCurrentUser();
+          if (freshUser) setUser(freshUser);
+      };
+      window.addEventListener('user-points-updated', handlePointsUpdate);
+
+      // Toast Event Listener
+      const handleToastEvent = (e: any) => {
+          const { type, message } = e.detail;
+          addToast(type, message);
+      };
+      window.addEventListener('show-toast', handleToastEvent);
+
+      // Listener for external navigation (e.g. from Navbar popover)
+      const handleViewUserProfile = (e: CustomEvent) => {
+          handleViewProfile(e.detail);
+      };
+      window.addEventListener('view-user-profile' as any, handleViewUserProfile);
+
+      recordingService.start();
+
+      return () => {
+          window.removeEventListener('anim-settings-changed', handleAnimChange);
+          window.removeEventListener('user-points-updated', handlePointsUpdate);
+          window.removeEventListener('show-toast', handleToastEvent);
+          window.removeEventListener('view-user-profile' as any, handleViewUserProfile);
+          recordingService.stop(); 
+      };
+  }, []);
+
   const addToast = (type: ToastType, message: string) => {
-    const newToast = { id: Date.now(), type, message };
-    setToasts(prev => [...prev, newToast]);
+      const newToast: ToastMessage = { id: Date.now(), type, message };
+      setToasts(prev => [...prev.slice(-3), newToast]);
   };
 
   const removeToast = (id: number) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+      setToasts(prev => prev.filter(t => t.id !== id));
   };
 
   useEffect(() => {
-    // Animasyon süresini biraz daha uzatarak keyfini çıkaralım (2.5sn)
-    const duration = 2500; 
-    const interval = 50;
-    const steps = duration / interval;
-    let currentStep = 0;
-
-    const timer = setInterval(() => {
-      currentStep++;
-      const progress = Math.min((currentStep / steps) * 100, 100);
-      setLoadingProgress(progress);
-
-      if (progress >= 100) {
-        clearInterval(timer);
-        setTimeout(() => setIsAppLoading(false), 500); // %100 olduktan sonra kısa bekleme
-      }
-    }, interval);
-
-    const initSession = async () => {
-      try {
-        // Ziyaretçi kaydı
-        statsService.recordVisit();
+    const checkBoot = async () => {
+        const hasBooted = sessionStorage.getItem('mv_intro_seen_v2');
         
-        // Load Session
-        const sessionUser = await authService.getCurrentUser();
-        if (sessionUser) {
-          setUser(sessionUser);
+        const initData = async () => {
+            try {
+                statsService.recordVisit();
+                const sessionUser = await authService.getCurrentUser();
+                if (sessionUser) {
+                    setUser(sessionUser);
+                    gamificationService.checkDailyLogin(sessionUser);
+                }
+                const loadedProducts = await productService.getProducts();
+                setProducts(loadedProducts);
+                const savedFavs = localStorage.getItem('mv_favorites');
+                if (savedFavs) setFavoriteIds(JSON.parse(savedFavs));
+            } catch (e) { console.error(e); }
+        };
+        initData();
+
+        if (hasBooted) { 
+            setBootState('complete');
+            if (!tourService.hasSeenTour()) {
+                setTimeout(() => setShowTour(true), 1000);
+            }
         }
-
-        // Load Products
-        const loadedProducts = await productService.getProducts();
-        setProducts(loadedProducts);
-
-        // Load Favorites
-        const savedFavs = localStorage.getItem('mv_favorites');
-        if (savedFavs) {
-            setFavoriteIds(JSON.parse(savedFavs));
-        }
-
-      } catch (e) {
-        console.error('Session/Product init failed', e);
-      }
     };
-    initSession();
+    checkBoot();
 
-    // Session Duration & Scroll Listener
     const trackSession = () => {
         const duration = Math.round((Date.now() - sessionStartTime.current) / 1000);
-        if (duration > 0) {
-            // Use ref to get the latest user state inside the event listener
-            statsService.trackEvent('session_duration', { 
-                duration,
-                userId: userRef.current?.id
-            });
-        }
+        if (duration > 0) statsService.trackEvent('session_duration', { duration, userId: userRef.current?.id });
+        recordingService.stop();
     };
-
-    const handleScroll = () => {
-        if (window.scrollY > 400) {
-            setShowScrollTop(true);
-        } else {
-            setShowScrollTop(false);
-        }
-    };
+    const handleScroll = () => setShowScrollTop(window.scrollY > 400);
 
     window.addEventListener('beforeunload', trackSession);
     window.addEventListener('scroll', handleScroll);
-
-    return () => {
-        clearInterval(timer);
-        window.removeEventListener('beforeunload', trackSession);
-        window.removeEventListener('scroll', handleScroll);
-        // Cleanup sırasında da track edelim (SPA navigasyonu için)
-        trackSession();
-    };
+    return () => { window.removeEventListener('beforeunload', trackSession); window.removeEventListener('scroll', handleScroll); trackSession(); };
   }, []);
 
-  // Her view değişiminde ürünleri yenile (Admin tarafındaki güncellemeleri yakalamak için)
+  const handleIntroComplete = () => {
+      setBootState('complete');
+      sessionStorage.setItem('mv_intro_seen_v2', 'true');
+      if (!tourService.hasSeenTour()) {
+          setTimeout(() => setShowTour(true), 1000);
+      }
+  };
+
+  const handleTourComplete = () => {
+      setShowTour(false);
+      tourService.completeTour();
+  };
+
   useEffect(() => {
-    if (view === 'home' || view === 'shop') {
-      productService.getProducts().then(setProducts);
-    }
-    // Sayfa değiştiğinde en üste at
-    window.scrollTo(0, 0);
+    productService.getProducts().then(setProducts);
   }, [view]);
 
-  // Save favorites to local storage whenever they change
-  useEffect(() => {
-      localStorage.setItem('mv_favorites', JSON.stringify(favoriteIds));
-  }, [favoriteIds]);
+  const navigateTo = (newView: ViewState, data?: any) => {
+      if (newView === 'shop' && data) {
+          setInitialShopCategory(data);
+      } else {
+          setInitialShopCategory('ALL');
+      }
+      
+      if (newView === 'product-detail' && data) {
+          setSelectedProduct(data);
+      }
 
-  const scrollToTop = () => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setView(newView);
+      setIsMobileMenuOpen(false); 
   };
 
-  const handleCategorySelect = (category: ProductCategory) => {
-      setSelectedCategory(category);
-      setView('shop');
-      window.scrollTo(0, 0);
-  };
+  const addToCart = (product: Product, event?: React.MouseEvent) => {
+    playSuccess(); 
+    
+    if (event) {
+        const img = document.createElement('img');
+        img.src = product.image;
+        const startRect = (event.target as HTMLElement).closest('.group')?.querySelector('img')?.getBoundingClientRect();
+        const cartIcon = document.getElementById('tour-cart');
+        const targetRect = cartIcon?.getBoundingClientRect();
 
-  const handleAddToCart = (product: Product) => {
-    // Analytics
-    statsService.trackEvent('add_to_cart', {
-        productId: product.id,
-        productName: product.name,
-        userId: user?.id,
-        userName: user?.name
-    });
+        if (startRect && targetRect) {
+            setFlyingItems(prev => [...prev, { id: Date.now(), image: product.image, startRect, targetRect }]);
+        }
+    }
 
     setCartItems(prev => {
-      const existing = prev.find(p => p.id === product.id);
+      const existing = prev.find(item => item.id === product.id);
       if (existing) {
-        addToast('success', 'Sepet güncellendi.');
-        return prev.map(p => p.id === product.id ? { ...p, quantity: p.quantity + 1 } : p);
+        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
-      addToast('success', `${product.name} sepete eklendi.`);
       return [...prev, { ...product, quantity: 1 }];
     });
+    
+    statsService.trackEvent('add_to_cart', { productId: product.id, productName: product.name, userId: user?.id });
+    addToast('success', 'Ürün sepete eklendi');
   };
 
-  const handleUpdateQuantity = (id: number, delta: number) => {
+  const updateQuantity = (id: number, delta: number) => {
     setCartItems(prev => prev.map(item => {
       if (item.id === id) {
-        const newQty = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: newQty };
+        const newQuantity = Math.max(0, item.quantity + delta);
+        return { ...item, quantity: newQuantity };
       }
       return item;
-    }));
+    }).filter(item => item.quantity > 0));
   };
 
-  const handleRemoveItem = (id: number) => {
-    setCartItems(prev => prev.filter(item => item.id !== id));
-    addToast('info', 'Ürün sepetten kaldırıldı.');
-  };
-
-  const handleCheckoutStart = async () => {
-    // Analytics
-    statsService.trackEvent('checkout_start', {
-        userId: user?.id,
-        userName: user?.name
+  const toggleFavorite = (product: Product) => {
+    setFavoriteIds(prev => {
+      const newIds = prev.includes(product.id) ? prev.filter(id => id !== product.id) : [...prev, product.id];
+      localStorage.setItem('mv_favorites', JSON.stringify(newIds));
+      return newIds;
     });
-
-    if (!user) {
-      setIsCartOpen(false);
-      setAuthMode('login');
-      setIsAuthOpen(true);
-      addToast('info', 'Ödeme yapmak için lütfen giriş yapın.');
-      return;
-    }
-    if (cartItems.length === 0) return;
-    setIsCartOpen(false);
-    setIsPaymentOpen(true);
+    addToast('info', favoriteIds.includes(product.id) ? 'Favorilerden çıkarıldı' : 'Favorilere eklendi');
   };
 
-  const handlePaymentSuccess = async () => {
-    if (!user) return;
-    try {
-      const total = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      await orderService.createOrder(user, cartItems, total);
-      setCartItems([]);
-      setIsPaymentOpen(false);
-      setView('profile');
-      addToast('success', 'Siparişiniz başarıyla oluşturuldu!');
-    } catch (error) {
-      console.error("Sipariş oluşturulamadı", error);
-      addToast('error', 'Sipariş oluşturulurken bir hata oluştu.');
-    }
-  };
-
-  const handleLogout = async () => {
-    await authService.logout();
-    setUser(null);
-    setView('home');
-    addToast('info', 'Başarıyla çıkış yapıldı.');
-  };
-
-  const handleProductClick = (product: Product) => {
-    setSelectedProduct(product);
-    setView('product_detail');
-    window.scrollTo(0, 0);
-  };
-  
-  const handleQuickView = (product: Product) => {
-    setQuickViewProduct(product);
-  };
-
-  const handleToggleFavorite = (product: Product) => {
-      if (!user) {
-          setAuthMode('login');
-          setIsAuthOpen(true);
-          return;
-      }
-
-      setFavoriteIds(prev => {
-          if (prev.includes(product.id)) {
-              addToast('info', 'Favorilerden çıkarıldı.');
-              return prev.filter(id => id !== product.id);
+  const toggleCompare = (product: Product) => {
+      setCompareList(prev => {
+          const exists = prev.find(p => p.id === product.id);
+          if (exists) {
+              return prev.filter(p => p.id !== product.id);
           } else {
-              addToast('success', 'Favorilere eklendi.');
-              return [...prev, product.id];
+              if (prev.length >= 3) {
+                  addToast('info', 'En fazla 3 ürün karşılaştırabilirsiniz.');
+                  return prev;
+              }
+              return [...prev, product];
           }
       });
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    if (query && view !== 'shop') {
-        setView('shop');
+  const handleCheckout = async () => {
+    if (!user) {
+        setIsCartOpen(false);
+        setAuthMode('login');
+        setIsAuthOpen(true);
+        return;
     }
+    setIsCartOpen(false);
+    setIsPaymentOpen(true);
+    statsService.trackEvent('checkout_start', { userId: user.id });
   };
 
-  // Sort Function Logic
-  const getSortedProducts = (productList: Product[]) => {
-      if (sortOption === 'price-asc') {
-          return [...productList].sort((a, b) => a.price - b.price);
-      } else if (sortOption === 'price-desc') {
-          return [...productList].sort((a, b) => b.price - a.price);
-      } else if (sortOption === 'rating') {
-          return [...productList].sort((a, b) => b.rating - a.rating);
+  const handlePaymentComplete = async () => {
+      let total = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      if (user?.rank === 'Yol Kaptanı') {
+          total = total * 0.95;
       }
-      return productList;
+
+      await orderService.createOrder(user!, cartItems, total);
+      setCartItems([]);
+      setIsPaymentOpen(false);
+      playSuccess();
+      addToast('success', 'Siparişiniz başarıyla alındı!');
+      navigateTo('profile');
   };
 
-  const renderContent = () => {
-    switch (view) {
-      case 'admin_panel':
-        return <AdminPanel onLogout={handleLogout} onBackToSite={() => setView('home')} onShowToast={addToast} />;
-      
-      case 'ride_mode':
-        return <RideMode onClose={() => setView('home')} />;
-
-      case 'profile':
-        if (!user) { setView('home'); return null; }
-        return <UserProfile user={user} onLogout={handleLogout} onNavigate={setView} />;
-
-      case 'about':
-        return <About onNavigate={setView} />;
-
-      case 'forum':
-        return <Forum user={user} onOpenAuth={() => setIsAuthOpen(true)} />;
-
-      case 'ai_assistant':
-        return (
-          <div className="pt-32 pb-20 max-w-4xl mx-auto px-4">
-            <div className="text-center mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-               <h1 className="text-4xl md:text-5xl font-display font-bold text-white mb-4">YAPAY ZEKA <span className="text-moto-accent">ASİSTAN</span></h1>
-               <p className="text-gray-400">Sürüş tarzına en uygun ekipmanı bulmak için MotoVibe AI ile konuş.</p>
-            </div>
-            <AIChat />
-          </div>
-        );
-
-      case 'product_detail':
-        if (!selectedProduct) return null;
-        return (
-            <ProductDetail 
-                product={selectedProduct} 
-                allProducts={products}
-                onBack={() => setView('shop')} 
-                onAddToCart={handleAddToCart} 
-                onProductClick={handleProductClick}
-            />
-        );
-
-      case 'favorites':
-        // KULLANICI GİRİŞ KONTROLÜ
-        if (!user) {
-            return (
-                <div className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto animate-in fade-in">
-                    <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6 bg-gray-900/50 border border-white/10 rounded-3xl p-10 backdrop-blur-sm relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-b from-moto-accent/5 to-transparent pointer-events-none"></div>
-                        <div className="w-24 h-24 bg-gray-800/80 rounded-full flex items-center justify-center mb-4 border border-white/10 shadow-2xl relative">
-                           <Heart className="w-10 h-10 text-gray-500" />
-                           <div className="absolute -bottom-1 -right-1 bg-moto-accent p-2 rounded-full border-4 border-gray-900">
-                               <Lock className="w-4 h-4 text-white" />
-                           </div>
-                        </div>
-                        
-                        <div>
-                            <h2 className="text-3xl font-display font-bold text-white mb-3">FAVORİLERİNİ SAKLA</h2>
-                            <p className="text-gray-400 max-w-md mx-auto text-sm leading-relaxed">
-                              Beğendiğin ürünleri listene eklemek, fiyat takibi yapmak ve her cihazdan erişebilmek için hesabına giriş yapmalısın.
-                            </p>
-                        </div>
-                        
-                        <Button 
-                            variant="primary" 
-                            size="lg" 
-                            onClick={() => { setAuthMode('login'); setIsAuthOpen(true); }}
-                            className="px-10 py-4 shadow-xl shadow-moto-accent/20"
-                        >
-                           GİRİŞ YAP / KAYIT OL
-                        </Button>
-                    </div>
-                </div>
-            );
-        }
-
-        const favoriteProducts = products.filter(p => favoriteIds.includes(p.id));
-        return (
-            <div className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto animate-in fade-in">
-                <div className="flex items-center gap-3 mb-10">
-                    <div className="p-3 bg-moto-accent/20 rounded-full border border-moto-accent/50">
-                        <Heart className="w-8 h-8 text-moto-accent fill-moto-accent" />
-                    </div>
-                    <div>
-                        <h2 className="text-3xl font-display font-bold text-white">FAVORİLERİM</h2>
-                        <p className="text-gray-400 text-sm">{favoriteProducts.length} ürün kaydedildi</p>
-                    </div>
-                </div>
-
-                {favoriteProducts.length === 0 ? (
-                    <div className="text-center py-20 bg-white/5 rounded-2xl border border-white/10">
-                        <Heart className="w-16 h-16 mx-auto text-gray-600 mb-4" />
-                        <p className="text-gray-400 text-lg mb-6">Henüz favori ürününüz yok.</p>
-                        <Button variant="cyber" onClick={() => setView('shop')}>
-                            MAĞAZAYA GİT
-                        </Button>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {favoriteProducts.map(product => (
-                            <ProductCard 
-                                key={product.id} 
-                                product={product} 
-                                onAddToCart={handleAddToCart} 
-                                onClick={handleProductClick}
-                                onQuickView={handleQuickView}
-                                isFavorite={true}
-                                onToggleFavorite={handleToggleFavorite}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-
-      case 'shop':
-        let filteredProducts = products.filter(p => {
-           const matchesCategory = selectedCategory === 'ALL' || p.category === selectedCategory;
-           const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                 p.description.toLowerCase().includes(searchQuery.toLowerCase());
-           return matchesCategory && matchesSearch;
-        });
-        
-        filteredProducts = getSortedProducts(filteredProducts);
-
-        return (
-          <div className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-             <div className="flex flex-col md:flex-row items-center justify-between mb-10 gap-6">
-                <h2 className="text-4xl font-display font-bold text-white">Mağaza</h2>
-                
-                <div className="flex flex-col sm:flex-row gap-4 items-center">
-                    {/* Category Filter */}
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {['ALL', ...Object.values(ProductCategory)].map((cat) => (
-                        <button
-                          key={cat}
-                          onClick={() => setSelectedCategory(cat as any)}
-                          className={`px-4 py-2 rounded-full text-sm font-bold transition-all duration-300 ${
-                            selectedCategory === cat 
-                              ? 'bg-moto-accent text-white shadow-[0_0_15px_rgba(255,31,31,0.4)]' 
-                              : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          {cat === 'ALL' ? 'Tümü' : cat}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Sort Dropdown */}
-                    <div className="relative group">
-                        <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 rounded-full text-sm text-gray-300 border border-gray-700 group-hover:border-moto-accent transition-colors cursor-pointer">
-                            <ArrowUpDown className="w-4 h-4" />
-                            <select 
-                                value={sortOption}
-                                onChange={(e) => setSortOption(e.target.value)}
-                                className="bg-transparent outline-none appearance-none cursor-pointer text-white font-bold"
-                            >
-                                <option value="default">Önerilen</option>
-                                <option value="price-asc">Fiyat (Artan)</option>
-                                <option value="price-desc">Fiyat (Azalan)</option>
-                                <option value="rating">En Çok Oy Alan</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-             </div>
-
-             {filteredProducts.length === 0 ? (
-                <div className="text-center py-20">
-                   <p className="text-gray-500 text-lg">Aradığınız kriterlere uygun ürün bulunamadı.</p>
-                   <Button variant="outline" className="mt-4" onClick={() => {setSelectedCategory('ALL'); setSearchQuery('')}}>Filtreleri Temizle</Button>
-                </div>
-             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {filteredProducts.map(product => (
-                    <ProductCard 
-                      key={product.id} 
-                      product={product} 
-                      onAddToCart={handleAddToCart} 
-                      onClick={handleProductClick}
-                      onQuickView={handleQuickView}
-                      isFavorite={favoriteIds.includes(product.id)}
-                      onToggleFavorite={handleToggleFavorite}
-                    />
-                  ))}
-                </div>
-             )}
-          </div>
-        );
-
-      case 'home':
-      default:
-        const featuredProducts = products.slice(0, 4);
-        return (
-          <>
-            <Hero onNavigate={setView} />
-
-            {/* Category Grid */}
-            <CategoryGrid onCategorySelect={handleCategorySelect} />
-            
-            {/* Featured Section */}
-            <div className="py-20 bg-[#050505] relative">
-               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                  <div className="flex items-end justify-between mb-12">
-                     <div>
-                        <h2 className="text-3xl md:text-4xl font-display font-bold text-white mb-2">
-                           ÖNE ÇIKAN <span className="text-moto-accent">EKİPMANLAR</span>
-                        </h2>
-                        <div className="h-1 w-20 bg-moto-accent"></div>
-                     </div>
-                     <Button variant="cyber" onClick={() => setView('shop')} className="hidden sm:flex">
-                        TÜMÜNÜ GÖR <ArrowRight className="w-4 h-4 ml-2" />
-                     </Button>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                     {featuredProducts.map(product => (
-                        <ProductCard 
-                          key={product.id} 
-                          product={product} 
-                          onAddToCart={handleAddToCart} 
-                          onClick={handleProductClick}
-                          onQuickView={handleQuickView}
-                          isFavorite={favoriteIds.includes(product.id)}
-                          onToggleFavorite={handleToggleFavorite}
-                        />
-                     ))}
-                  </div>
-                  
-                  <div className="mt-12 text-center sm:hidden">
-                     <Button variant="cyber" onClick={() => setView('shop')} className="w-full">
-                        TÜMÜNÜ GÖR <ArrowRight className="w-4 h-4 ml-2" />
-                     </Button>
-                  </div>
-               </div>
-            </div>
-          </>
-        );
-    }
+  const handleStartRide = (route: RouteType | null) => {
+      setActiveRoute(route);
+      navigateTo('ride-mode');
   };
 
-  if (isAppLoading) {
-    return (
-      <div className="fixed inset-0 bg-[#050505] z-[100] flex flex-col items-center justify-center overflow-hidden">
-         {/* Background Grid Animation */}
-         <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f1f1f_1px,transparent_1px),linear-gradient(to_bottom,#1f1f1f_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20"></div>
-         
-         {/* Racing Bike Container - Moves across screen based on progress */}
-         <div 
-            className="absolute w-24 h-12 transition-all duration-100 ease-linear"
-            style={{ 
-                left: `calc(${loadingProgress}% - 48px)`, // Center bike on progress point
-                bottom: '50%',
-                transform: 'translateY(50%)'
-            }}
-         >
-             {/* Speed Lines behind bike */}
-             <div className="absolute -left-20 top-1/2 -translate-y-1/2 w-20 h-full flex flex-col gap-1 opacity-0 animate-[fade-in_0.5s_ease-in_forwards]">
-                 <div className="h-[1px] w-full bg-gradient-to-r from-transparent to-moto-accent/50 translate-x-4"></div>
-                 <div className="h-[1px] w-[80%] bg-gradient-to-r from-transparent to-white/30 translate-x-8"></div>
-                 <div className="h-[1px] w-[60%] bg-gradient-to-r from-transparent to-moto-accent/50 translate-x-12"></div>
-             </div>
+  const handleViewProfile = async (userId: string) => {
+      if (user && user.id === userId) {
+          navigateTo('profile');
+          return;
+      }
 
-             {/* Bike Icon with Rumble Effect */}
-             <div className="relative animate-[rumble_0.1s_infinite]">
-                <Bike className="w-16 h-16 text-white fill-white drop-shadow-[0_0_15px_rgba(255,31,31,0.8)] transform -scale-x-100" strokeWidth={1.5} />
-                
-                {/* Headlight Beam */}
-                <div className="absolute top-1/3 right-0 w-32 h-8 bg-gradient-to-r from-white/80 to-transparent blur-md transform rotate-12 origin-left"></div>
-                
-                {/* Wheels Blur Effect */}
-                <div className="absolute bottom-1 left-1 w-4 h-4 bg-moto-accent/50 blur-sm rounded-full animate-pulse"></div>
-                <div className="absolute bottom-1 right-3 w-4 h-4 bg-moto-accent/50 blur-sm rounded-full animate-pulse delay-75"></div>
-             </div>
-         </div>
+      const targetUser = await authService.getUserById(userId);
+      if (targetUser) {
+          setViewingUser(targetUser);
+          navigateTo('public-profile');
+      } else {
+          notify.error('Kullanıcı bulunamadı.');
+      }
+  };
 
-         {/* Progress Line (Road) */}
-         <div className="absolute bottom-[calc(50%-30px)] left-0 w-full px-8 md:px-32">
-            <div className="w-full h-[1px] bg-gray-800 relative">
-                <div 
-                    className="absolute top-0 left-0 h-full bg-moto-accent shadow-[0_0_10px_#ff1f1f]"
-                    style={{ width: `${loadingProgress}%` }}
-                ></div>
-            </div>
-            <div className="flex justify-between mt-2 font-mono text-[10px] text-gray-500">
-                <span>START</span>
-                <span>{Math.round(loadingProgress)}%</span>
-            </div>
-         </div>
+  const renderView = () => {
+      switch(view) {
+          case 'home': return <Home products={products} onAddToCart={addToCart} onProductClick={(p) => navigateTo('product-detail', p)} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} onQuickView={setQuickViewProduct} onCompare={toggleCompare} compareList={compareList} onNavigate={navigateTo} onToggleMenu={() => setIsMobileMenuOpen(true)} />;
+          case 'shop': return <Shop products={products} onAddToCart={addToCart} onProductClick={(p) => navigateTo('product-detail', p)} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} onQuickView={setQuickViewProduct} onCompare={toggleCompare} compareList={compareList} onNavigate={navigateTo} initialCategory={initialShopCategory} />;
+          case 'product-detail': return <ProductDetail product={selectedProduct} allProducts={products} onAddToCart={addToCart} onNavigate={navigateTo} onProductClick={(p) => navigateTo('product-detail', p)} onCompare={toggleCompare} isCompared={compareList.some(p => p.id === selectedProduct?.id)} />;
+          case 'favorites': return <Favorites products={products} favoriteIds={favoriteIds} onAddToCart={addToCart} onProductClick={(p) => navigateTo('product-detail', p)} onToggleFavorite={toggleFavorite} onQuickView={setQuickViewProduct} onNavigate={navigateTo} />;
+          case 'routes': return <RouteExplorer user={user} onOpenAuth={() => setIsAuthOpen(true)} onStartRide={handleStartRide} />;
+          case 'meetup': return <MotoMeetup user={user} onOpenAuth={() => setIsAuthOpen(true)} onNavigate={navigateTo} />; 
+          case 'service-finder': return <ServiceFinder onNavigate={navigateTo} />; 
+          case 'ride-mode': return <RideMode route={activeRoute} onNavigate={navigateTo} />;
+          case 'mototool': return <MotoTool onNavigate={navigateTo} />;
+          case 'valuation': return <MotoValuation onNavigate={navigateTo} />;
+          case 'qr-generator': return <HelmetQRGenerator onNavigate={navigateTo} />;
+          case 'vlog-map': return <MotoVlogMap onNavigate={navigateTo} onAddToCart={addToCart} onProductClick={(p) => navigateTo('product-detail', p)} />;
+          case 'lifesaver': return <LifeSaver onClose={() => navigateTo('home')} />;
+          case 'profile': return user ? <UserProfile user={user} onLogout={() => { authService.logout(); setUser(null); navigateTo('home'); }} onUpdateUser={setUser} onNavigate={navigateTo} colorTheme={colorTheme} onColorChange={setColorTheme} /> : <div className="pt-32 text-center text-gray-500">Lütfen giriş yapın.</div>;
+          case 'public-profile': return viewingUser ? <PublicProfile user={viewingUser} onBack={() => navigateTo('riders')} currentUserId={user?.id} /> : <div className="pt-32 text-center text-gray-500">Kullanıcı yüklenemedi.</div>;
+          case 'admin': return user?.isAdmin ? <AdminPanel onLogout={() => { authService.logout(); setUser(null); navigateTo('home'); }} onShowToast={addToast} onNavigate={navigateTo} /> : <div className="pt-32 text-center text-gray-500">Yetkisiz erişim.</div>;
+          case 'blog': return <Blog onNavigate={navigateTo} />;
+          case 'about': return <About onNavigate={navigateTo} />;
+          case 'ai-assistant': return <AIAssistantPage />;
+          case 'forum': return <Forum user={user} onOpenAuth={() => setIsAuthOpen(true)} onViewProfile={handleViewProfile} onOpenPro={() => setIsProModalOpen(true)} />;
+          case 'riders': return <RidersDirectory onViewProfile={handleViewProfile} onNavigate={navigateTo} />;
+          default: return <Home products={products} onAddToCart={addToCart} onProductClick={(p) => navigateTo('product-detail', p)} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} onQuickView={setQuickViewProduct} onCompare={toggleCompare} compareList={compareList} onNavigate={navigateTo} onToggleMenu={() => setIsMobileMenuOpen(true)} />;
+      }
+  };
 
-         {/* Loading Text */}
-         <div className="absolute bottom-10 font-display font-bold text-2xl text-white tracking-[0.2em] animate-pulse">
-            YÜKLENİYOR
-         </div>
-
-         <style>{`
-            @keyframes rumble {
-                0% { transform: translateY(0px) rotate(0deg) scaleX(-1); }
-                25% { transform: translateY(-1px) rotate(-1deg) scaleX(-1); }
-                50% { transform: translateY(1px) rotate(1deg) scaleX(-1); }
-                75% { transform: translateY(-1px) rotate(0deg) scaleX(-1); }
-                100% { transform: translateY(0px) rotate(0deg) scaleX(-1); }
-            }
-         `}</style>
-      </div>
-    );
+  if (bootState === 'idle') {
+      return <IntroAnimation onComplete={handleIntroComplete} />;
   }
 
+  const isFullScreenMode = view === 'ride-mode' || view === 'mototool' || view === 'admin' || view === 'meetup' || view === 'valuation' || view === 'qr-generator' || view === 'vlog-map' || view === 'lifesaver';
+
   return (
-    <div className="min-h-screen bg-[#050505] text-white selection:bg-moto-accent selection:text-white font-sans">
-      {/* Global Toast Container */}
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
+    <div key={animKey} className={`flex flex-col min-h-[100dvh] bg-[#f9fafb] text-gray-900 transition-colors duration-1000 ${isFullScreenMode ? 'overflow-hidden h-screen bg-black text-white' : ''}`}>
+        
+        <div className="bg-noise opacity-5"></div>
 
-      {/* Navbar (Admin panelinde ve Ride Mode'da gizli) */}
-      {view !== 'admin_panel' && view !== 'ride_mode' && (
-          <Navbar 
-            cartCount={cartItems.reduce((a, b) => a + b.quantity, 0)}
-            favoritesCount={favoriteIds.length}
-            onCartClick={() => setIsCartOpen(true)}
-            onFavoritesClick={() => setView('favorites')}
-            onNavigate={setView}
-            currentView={view}
-            onSearch={handleSearch}
+        {!isFullScreenMode && <LivingBackground />}
+
+        {!isFullScreenMode && <ScrollProgress />}
+
+        {/* Global Toast Container */}
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+        <AnimatePresence>
+            {flyingItems.map(item => (
+                <FlyToCart 
+                    key={item.id} 
+                    image={item.image} 
+                    startRect={item.startRect} 
+                    targetRect={item.targetRect} 
+                    onComplete={() => setFlyingItems(prev => prev.filter(i => i.id !== item.id))} 
+                />
+            ))}
+            
+            {showTour && <OnboardingTour onComplete={handleTourComplete} />}
+        </AnimatePresence>
+
+        <AuthModal 
+            isOpen={isAuthOpen} 
+            onClose={() => setIsAuthOpen(false)} 
+            initialMode={authMode} 
+            onLogin={(u) => { setUser(u); setIsAuthOpen(false); addToast('success', `Hoş geldin, ${u.name}`); }} 
+        />
+
+        <CartDrawer 
+            isOpen={isCartOpen} 
+            onClose={() => setIsCartOpen(false)} 
+            items={cartItems} 
+            onUpdateQuantity={updateQuantity} 
+            onRemoveItem={(id) => setCartItems(prev => prev.filter(item => item.id !== id))} 
+            onCheckout={handleCheckout} 
+            user={user} 
+        />
+
+        <PaymentModal 
+            isOpen={isPaymentOpen} 
+            onClose={() => setIsPaymentOpen(false)} 
+            totalAmount={cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (user?.rank === 'Yol Kaptanı' ? 0.95 : 1)}
+            items={cartItems}
             user={user}
-            onOpenAuth={() => setIsAuthOpen(true)}
-            onLogout={handleLogout}
-          />
-      )}
+            onPaymentComplete={handlePaymentComplete} 
+        />
 
-      {/* Main Content with Transition Effect */}
-      <main className="relative min-h-screen">
-         <div key={view} className="animate-in fade-in slide-in-from-bottom-2 duration-500 ease-out">
-            {renderContent()}
-         </div>
-      </main>
+        <ThemeModal
+            isOpen={isThemeModalOpen}
+            onClose={() => setIsThemeModalOpen(false)}
+            currentTheme={colorTheme}
+            onThemeChange={setColorTheme}
+        />
 
-      {/* Scroll To Top Button */}
-      {view !== 'ride_mode' && (
-        <button 
-            onClick={scrollToTop}
-            className={`fixed bottom-24 right-6 z-40 p-3 bg-black border border-moto-accent/50 rounded-full text-moto-accent shadow-[0_0_20px_rgba(255,31,31,0.3)] transition-all duration-500 hover:bg-moto-accent hover:text-white ${
-                showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
-            }`}
-        >
-            <ArrowUp className="w-6 h-6" />
-        </button>
-      )}
+        {!isFullScreenMode && (
+            <>
+                <Navbar 
+                    cartCount={cartItems.reduce((a, b) => a + b.quantity, 0)}
+                    favoritesCount={favoriteIds.length}
+                    onCartClick={() => setIsCartOpen(true)}
+                    onFavoritesClick={() => navigateTo('favorites')}
+                    onSearch={() => navigateTo('shop')}
+                    user={user}
+                    onOpenAuth={() => setIsAuthOpen(true)}
+                    onLogout={() => { authService.logout(); setUser(null); }}
+                    onNavigate={navigateTo}
+                    currentView={view}
+                    colorTheme={colorTheme}
+                    onColorChange={setColorTheme}
+                    onToggleMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                />
+                <BottomNav 
+                    currentView={view}
+                    onNavigate={navigateTo}
+                    cartCount={cartItems.reduce((a, b) => a + b.quantity, 0)}
+                    isOpen={isMobileMenuOpen}
+                    onClose={() => setIsMobileMenuOpen(false)}
+                    user={user}
+                    onOpenAuth={() => setIsAuthOpen(true)}
+                    onOpenFeedback={() => setIsFeedbackOpen(true)}
+                    onToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    onOpenThemeModal={() => setIsThemeModalOpen(true)}
+                />
+            </>
+        )}
 
-      {/* Global Components (Modals, Chat Widget) */}
-      {/* Support Widget - Show on all pages EXCEPT Admin Panel, AI Assistant Page and Ride Mode */}
-      {view !== 'admin_panel' && view !== 'ai_assistant' && view !== 'ride_mode' && (
-         <SupportChatWidget />
-      )}
+        {/* Main Content */}
+        <main className={`relative w-full flex-1 z-10 transition-all duration-300 ${isFullScreenMode ? 'h-full' : 'pb-20 md:pb-0'}`}>
+            <AnimatePresence mode="wait" onExitComplete={() => window.scrollTo(0, 0)}>
+                <motion.div
+                    key={view}
+                    initial={{ opacity: 0, filter: 'blur(10px)', scale: 0.98 }}
+                    animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+                    exit={{ opacity: 0, filter: 'blur(10px)', scale: 1.02 }}
+                    transition={{ duration: 0.3, ease: "easeInOut" }}
+                    className="w-full h-full"
+                >
+                    {renderView()}
+                </motion.div>
+            </AnimatePresence>
+        </main>
 
-      {/* Footer */}
-      {view !== 'admin_panel' && view !== 'ride_mode' && (
-          <footer className="bg-black border-t border-white/10 py-12 mt-auto">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-                  <div>
-                     <div className="flex items-center gap-2 mb-4">
-                        <Zap className="h-5 w-5 text-moto-accent" />
-                        <span className="text-xl font-display font-bold text-white tracking-tighter">
-                          MOTO<span className="text-moto-accent">VIBE</span>
-                        </span>
-                     </div>
-                     <p className="text-gray-500 text-sm leading-relaxed">
-                        Motosiklet tutkunları için en ileri teknoloji, en güvenli ekipman ve en iyi deneyim.
-                     </p>
-                  </div>
-                  <div>
-                     <h4 className="text-white font-bold mb-4">Mağaza</h4>
-                     <ul className="space-y-2 text-sm text-gray-500">
-                        <li onClick={() => {setView('shop'); setSelectedCategory(ProductCategory.HELMET)}} className="cursor-pointer hover:text-moto-accent">Kasklar</li>
-                        <li onClick={() => {setView('shop'); setSelectedCategory(ProductCategory.JACKET)}} className="cursor-pointer hover:text-moto-accent">Montlar</li>
-                        <li onClick={() => {setView('shop'); setSelectedCategory(ProductCategory.GLOVES)}} className="cursor-pointer hover:text-moto-accent">Eldivenler</li>
-                        <li onClick={() => {setView('shop'); setSelectedCategory(ProductCategory.ACCESSORY)}} className="cursor-pointer hover:text-moto-accent">Aksesuarlar</li>
-                     </ul>
-                  </div>
-                  <div>
-                     <h4 className="text-white font-bold mb-4">Kurumsal</h4>
-                     <ul className="space-y-2 text-sm text-gray-500">
-                        <li onClick={() => setView('about')} className="cursor-pointer hover:text-moto-accent">Hakkımızda</li>
-                        <li className="cursor-pointer hover:text-moto-accent">Gizlilik Politikası</li>
-                        <li className="cursor-pointer hover:text-moto-accent">İade Koşulları</li>
-                        <li className="cursor-pointer hover:text-moto-accent">İletişim</li>
-                     </ul>
-                  </div>
-                  <div>
-                     <h4 className="text-white font-bold mb-4">Bülten</h4>
-                     <p className="text-xs text-gray-500 mb-4">Yeni ürünlerden ve indirimlerden haberdar ol.</p>
-                     <div className="flex">
-                        <input type="email" placeholder="E-posta" className="bg-gray-900 border border-gray-800 text-white px-3 py-2 text-sm rounded-l outline-none focus:border-moto-accent w-full" />
-                        <button className="bg-moto-accent px-3 py-2 rounded-r hover:bg-red-600 transition-colors"><ArrowRight className="w-4 h-4 text-white" /></button>
-                     </div>
-                  </div>
-               </div>
-               <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-                  <p className="text-xs text-gray-600">© 2024 MotoVibe Inc. Tüm hakları saklıdır.</p>
-                  <div className="flex gap-4 text-gray-600">
-                     {/* Social Icons Mockup */}
-                     <div className="w-5 h-5 bg-gray-800 rounded-full cursor-pointer hover:bg-moto-accent hover:text-white transition-colors"></div>
-                     <div className="w-5 h-5 bg-gray-800 rounded-full cursor-pointer hover:bg-moto-accent hover:text-white transition-colors"></div>
-                     <div className="w-5 h-5 bg-gray-800 rounded-full cursor-pointer hover:bg-moto-accent hover:text-white transition-colors"></div>
-                  </div>
-               </div>
-            </div>
-          </footer>
-      )}
+        <AnimatePresence>
+            {compareList.length > 0 && (
+                <CompareBar 
+                    items={compareList} 
+                    onRemove={(id) => setCompareList(prev => prev.filter(p => p.id !== id))}
+                    onCompare={() => setIsCompareModalOpen(true)}
+                    onClear={() => setCompareList([])}
+                />
+            )}
+        </AnimatePresence>
 
-      {/* Modals & Drawers */}
-      <CartDrawer 
-        isOpen={isCartOpen} 
-        onClose={() => setIsCartOpen(false)} 
-        items={cartItems} 
-        onUpdateQuantity={handleUpdateQuantity}
-        onRemoveItem={handleRemoveItem}
-        onCheckout={handleCheckoutStart}
-      />
+        <CompareModal 
+            isOpen={isCompareModalOpen}
+            onClose={() => setIsCompareModalOpen(false)}
+            products={compareList}
+            onAddToCart={addToCart}
+        />
 
-      <AuthModal 
-        isOpen={isAuthOpen} 
-        onClose={() => setIsAuthOpen(false)} 
-        initialMode={authMode}
-        onLogin={(loggedInUser) => {
-           setUser(loggedInUser);
-           setIsAuthOpen(false);
-           addToast('success', `Hoşgeldin, ${loggedInUser.name}!`);
-        }}
-      />
+        <FeedbackModal
+            isOpen={isFeedbackOpen}
+            onClose={() => setIsFeedbackOpen(false)}
+            user={user}
+        />
 
-      <PaymentModal
-        isOpen={isPaymentOpen}
-        onClose={() => setIsPaymentOpen(false)}
-        totalAmount={cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)}
-        onPaymentComplete={handlePaymentSuccess}
-      />
+        <ProductQuickViewModal 
+            isOpen={!!quickViewProduct} 
+            onClose={() => setQuickViewProduct(null)} 
+            product={quickViewProduct} 
+            onAddToCart={(p, e) => { addToCart(p, e); setQuickViewProduct(null); }} 
+            onViewDetail={(p) => { navigateTo('product-detail', p); setQuickViewProduct(null); }}
+        />
 
-      <ProductQuickViewModal 
-        isOpen={!!quickViewProduct}
-        onClose={() => setQuickViewProduct(null)}
-        product={quickViewProduct}
-        onAddToCart={handleAddToCart}
-        onViewDetail={handleProductClick}
-      />
+        {!isFullScreenMode && (
+            <footer className="bg-white text-gray-900 pt-20 pb-24 md:pb-10 border-t border-gray-200 relative overflow-hidden z-10">
+                <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-16">
+                        
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-2">
+                                <div className="w-10 h-10 bg-moto-accent rounded-xl flex items-center justify-center shadow-lg shadow-moto-accent/20 text-white">
+                                    <Zap className="w-6 h-6 fill-current" />
+                                </div>
+                                <span className="text-2xl font-display font-bold tracking-tighter text-gray-900">
+                                    MOTO<span className="text-moto-accent">VIBE</span>
+                                </span>
+                            </div>
+                            <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
+                                Geleceğin sürüş deneyimini tasarlıyoruz. Yapay zeka destekli ekipman seçimi ve premium motosiklet kültürü.
+                            </p>
+                            <div className="flex gap-4 pt-2">
+                                {[
+                                    { icon: Instagram, href: "#" },
+                                    { icon: Twitter, href: "#" },
+                                    { icon: Youtube, href: "#" },
+                                    { icon: Facebook, href: "#" }
+                                ].map((social, idx) => (
+                                    <a 
+                                        key={idx} 
+                                        href={social.href} 
+                                        className="group relative w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 border border-gray-200 hover:border-moto-accent hover:bg-moto-accent transition-all duration-300 hover:-translate-y-1"
+                                    >
+                                        <social.icon className="w-5 h-5 text-gray-500 group-hover:text-white relative z-10 transition-colors" />
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="font-bold mb-6 flex items-center gap-2 text-gray-900">
+                                <span className="w-1 h-4 bg-moto-accent rounded-full"></span>
+                                HIZLI ERİŞİM
+                            </h4>
+                            <ul className="space-y-3 text-sm text-gray-500">
+                                {['Koleksiyon', 'Rotalar', 'Etkinlikler', 'Blog', 'Hakkımızda', 'İletişim'].map((item) => (
+                                    <li key={item}>
+                                        <button 
+                                            onClick={() => navigateTo(
+                                                item === 'Koleksiyon' ? 'shop' : 
+                                                item === 'Rotalar' ? 'routes' : 
+                                                item === 'Etkinlikler' ? 'meetup' :
+                                                item === 'Blog' ? 'blog' : 
+                                                item === 'Hakkımızda' ? 'about' : 'home'
+                                            )}
+                                            className="hover:text-moto-accent hover:translate-x-1 transition-all duration-200 flex items-center gap-2"
+                                        >
+                                            <div className="w-1 h-1 bg-gray-300 rounded-full"></div> {item}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h4 className="font-bold mb-6 flex items-center gap-2 text-gray-900">
+                                <span className="w-1 h-4 bg-moto-accent rounded-full"></span>
+                                İLETİŞİM
+                            </h4>
+                            <ul className="space-y-4 text-sm text-gray-500">
+                                <li className="flex items-start gap-3">
+                                    <MapPin className="w-5 h-5 text-moto-accent shrink-0" />
+                                    <span>Maslak, Büyükdere Cd. No:123<br/>34398 Sarıyer/İstanbul</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <Phone className="w-5 h-5 text-moto-accent shrink-0" />
+                                    <span>+90 (212) 555 01 23</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <Mail className="w-5 h-5 text-moto-accent shrink-0" />
+                                    <span>hello@motovibe.com</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className="pt-8 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-400 font-mono">
+                        <p>© 2024 MotoVibe Inc. All rights reserved.</p>
+                        <div className="flex gap-6">
+                            <a href="#" className="hover:text-moto-accent transition-colors">Gizlilik</a>
+                            <a href="#" className="hover:text-moto-accent transition-colors">Şartlar</a>
+                            <a href="#" className="hover:text-moto-accent transition-colors">KVKK</a>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        )}
+
+        {showScrollTop && (
+            <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-24 md:bottom-6 right-6 bg-moto-accent text-white p-3 rounded-full shadow-lg z-40 hover:bg-black transition-colors animate-in fade-in slide-in-from-bottom-4 hidden md:flex">
+                <ArrowUp className="w-6 h-6" />
+            </button>
+        )}
     </div>
   );
 };
